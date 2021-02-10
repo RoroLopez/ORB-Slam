@@ -29,6 +29,9 @@ kp1 = []
 des1 = []
 last_frame = []
 
+R = np.zeros(shape=(3,3))
+t = np.zeros(shape=(3,3))
+
 # nt 	nfeatures = 500,
 # float 	scaleFactor = 1.2f,
 # int 	nlevels = 8,
@@ -49,6 +52,17 @@ def process_features_orb(frame):
     kp, des = orb.detectAndCompute(frame, None)
     return kp, des
 
+def degeneracyCheckPass(first_points, second_points, rot, trans):
+    rot_inv = rot
+    for first, second in zip(first_points, second_points):
+        first_z = np.dot(rot[0, :] - second[0]*rot[2, :], trans) / np.dot(rot[0, :] - second[0]*rot[2, :], second)
+        first_3d_point = np.array([first[0] * first_z, second[0] * first_z, first_z])
+        second_3d_point = np.dot(rot.T, first_3d_point) - np.dot(rot.T, trans)
+ 
+        if first_3d_point[2] < 0 or second_3d_point[2] < 0:
+            return False
+ 
+    return True
 
 while True:
     resize_frame = cv.resize(frame, (W, H))
@@ -62,6 +76,8 @@ while True:
     #     cv.circle(resize_frame, (x,y), 3, color=(0,0,255), thickness=-1)
 
     good = []
+    pts1 = []
+    pts2 = []
 
     kp2, des2 = process_features_orb(resize_frame)
 
@@ -85,22 +101,47 @@ while True:
         for i,(m,n) in enumerate(matches):
             if m.distance < 0.7*n.distance:
                 matchesMask[i] = [1,0]
+                pts2.append(kp2[m.trainIdx].pt)
+                pts1.append(kp1[m.queryIdx].pt)
 
         draw_params = dict(matchColor = (0,255,0),
                    singlePointColor = (255,0,0),
                    matchesMask = matchesMask,
                    flags = 0)
 
-
-    # print(type(kp))
-    # print(type(des))
-
-    # print(len(kp))
-
-    # for p in kp:
-    #     print(p)
-
     if len(kp1) != 0:
+        pts2 = np.float32(pts2)
+        pts1 = np.float32(pts1)
+        F, mask = cv.findFundamentalMat(pts1, pts2, cv.FM_RANSAC, 0.1, 0.99)
+
+        pts1 = pts1[mask.ravel()==1]
+        pts2 = pts2[mask.ravel()==1]
+
+        # lines1 = cv.computeCorrespondEpilines(pts2.reshape(-1,1,2),2,F)
+        # lines1 = lines1.reshape(-1,3)
+        # img5,img6 = drawlines(last_frame,resize_frame,lines1,pts1,pts2)
+
+        # lines2 = cv.computeCorrespondEpilines(pts1.reshape(-1,1,2),1,F)
+        # lines2 = lines2.reshape(-1,3)
+        # img3,img4 = drawlines(resize_frame,last_frame,lines2,pts2,pts1)
+
+        pt1 = np.array([[pts1[0][0]], [pts1[0][0]], [1]])
+        pt2 = np.array([[pts2[0][0], pts2[0][1], 1]])
+
+        E, _ = cv.findEssentialMat(pts1, pts2, F, cv.RANSAC, 0.99, 1.0, None)
+
+        _, R, t, _ = cv.recoverPose(E, pts1, pts2, F, R, t, None)
+
+        # print(R)
+        # Decomposing rotation matrix
+        pitch = np.arctan2(R[1][2], R[2][2]) * 180/3.1415
+        yaw = np.arctan2(-R[2][0], np.sqrt(R[2][1]*R[2][1] + R[2][2]*R[2][2])) * 180/3.1415
+        roll = np.arctan2(R[1][0],  R[0][0]) * 180/3.1415
+        
+        print("Roll: {0}, Pitch: {1}, Yaw: {2}".format(roll,pitch,yaw))
+        # print "Roll: %f, Pitch: %f, Yaw: %f" %(roll , pitch , yaw)
+
+        
         # original image for matches
         # img2 = cv.drawMatches(last_frame,kp1,resize_frame,kp2,matches[:1000], outImg=None, flags=2)
 
@@ -108,15 +149,15 @@ while True:
         # img2 = cv.drawMatchesKnn(last_frame, kp1, resize_frame, kp2, good, outImg=None, flags=2)
 
         # FLANN based Matcher
-        for m in matches:
-            print("distance: {0}".format(m[0].distance))
-        img2 = cv.drawMatchesKnn(last_frame,kp1,resize_frame,kp2,matches,None,**draw_params)
+        # for m in matches:
+        #     print("distance: {0}".format(m[0].distance))
+        # img2 = cv.drawMatchesKnn(last_frame,kp1,resize_frame,kp2,matches,None,**draw_params)
 
         kp1, des1, last_frame = kp2, des2, resize_frame
 
 
         # drawMatches(img1, keypoints1, img2, keypoints2, matches1to2, outImg, matchColor=None, singlePointColor=None, matchesMask=None, flags=None)
-        # img2 = cv.drawKeypoints(resize_frame,kp2,outImage=None,color=(0,255,0),flags=0)
+        img2 = cv.drawKeypoints(resize_frame,kp2,outImage=None,color=(0,255,0),flags=0)
 
     cv.imshow('frame', img2)
 
@@ -130,95 +171,6 @@ cap.release()
 cv.destroyAllWindows()
 
 # pose calculation code
- 
-# # K1 = np.float32([[1357.3, 0, 441.413], [0, 1355.9, 259.393], [0, 0, 1]]).reshape(3,3)
-# # K2 = np.float32([[1345.8, 0, 394.9141], [0, 1342.9, 291.6181], [0, 0, 1]]).reshape(3,3)
- 
-# # K1_inv = np.linalg.inv(K1)
-# # K2_inv = np.linalg.inv(K2)
- 
-# # Camera matrix from chessboard calibration
-# K = np.float32([[3541.5, 0, 2088.8], [0, 3546.9, 1161.4], [0, 0, 1]])
-# K_inv = np.linalg.inv(K)
- 
-# def degeneracyCheckPass(first_points, second_points, rot, trans):
-#     rot_inv = rot
-#     for first, second in zip(first_points, second_points):
-#         first_z = np.dot(rot[0, :] - second[0]*rot[2, :], trans) / np.dot(rot[0, :] - second[0]*rot[2, :], second)
-#         first_3d_point = np.array([first[0] * first_z, second[0] * first_z, first_z])
-#         second_3d_point = np.dot(rot.T, first_3d_point) - np.dot(rot.T, trans)
- 
-#         if first_3d_point[2] < 0 or second_3d_point[2] < 0:
-#             return False
- 
-#     return True
- 
-# def drawlines(img1,img2,lines,pts1,pts2):
-#     ''' img1 - image on which we draw the epilines for the points in img1
-#         lines - corresponding epilines '''
-#     pts1 = np.int32(pts1)
-#     pts2 = np.int32(pts2)
-#     r,c = img1.shape
-#     img1 = cv2.cvtColor(img1,cv2.COLOR_GRAY2BGR)
-#     img2 = cv2.cvtColor(img2,cv2.COLOR_GRAY2BGR)
-#     for r,pt1,pt2 in zip(lines,pts1,pts2):
-#         color = tuple(np.random.randint(0,255,3).tolist())
-#         x0,y0 = map(int, [0, -r[2]/r[1] ])
-#         x1,y1 = map(int, [c, -(r[2]+r[0]*c)/r[1] ])
-#         cv2.line(img1, (x0,y0), (x1,y1), color,1)
-#         cv2.circle(img1, tuple(pt1), 10, color, -1)
-#         cv2.circle(img2, tuple(pt2), 10, color, -1)
-#     return img1,img2
- 
-# # Read the images
- 
-# img1 = cv2.imread('sam1.jpg',0)   # Query image
-# img2 = cv2.imread('sam1.jpg',0)  # Train image
-# img1 = cv2.resize(img1, (0,0), fx = 0.5, fy = 0.5)
-# img2 = cv2.resize(img2, (0,0), fx = 0.5, fy = 0.5)
- 
-# sift = cv2.SIFT()
- 
-# # find the keypoints and descriptors with SIFT
-# kp1, des1 = sift.detectAndCompute(img1, None)
-# kp2, des2 = sift.detectAndCompute(img2, None)
- 
-# # FLANN parameters
-# FLANN_INDEX_KDTREE = 0
-# index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
-# search_params = dict(checks = 50)   # or pass empty dictionary
- 
-# flann = cv2.FlannBasedMatcher(index_params,search_params)
- 
-# matches = flann.knnMatch(des1, des2, k=2)
- 
-# good = []
-# pts1 = []
-# pts2 = []
- 
-# # ratio test as per Lowe's paper
-# for i,(m,n) in enumerate(matches):
-#     if m.distance < 0.7*n.distance:
-#         pts2.append(kp2[m.trainIdx].pt)
-#         pts1.append(kp1[m.queryIdx].pt)
- 
-# pts2 = np.float32(pts2)
-# pts1 = np.float32(pts1)
-# F, mask = cv2.findFundamentalMat(pts1, pts2, cv2.FM_RANSAC, 0.1, 0.99)
- 
-# # Selecting only the inliers
-# pts1 = pts1[mask.ravel()==1]
-# pts2 = pts2[mask.ravel()==1]
- 
-# # drawing lines on left image
-# lines1 = cv2.computeCorrespondEpilines(pts2.reshape(-1,1,2), 2, F)
-# lines1 = lines1.reshape(-1,3)
-# img5,img6 = drawlines(img1,img2,lines1,pts1,pts2)
- 
-# # drawing lines on right image
-# lines2 = cv2.computeCorrespondEpilines(pts1.reshape(-1,1,2), 1, F)
-# lines2 = lines2.reshape(-1,3)
-# img3,img4 = drawlines(img2,img1,lines2,pts2,pts1)
  
 # pt1 = np.array([[pts1[0][0]], [pts1[0][1]], [1]])
 # pt2 = np.array([[pts2[0][0], pts2[0][1], 1]])
