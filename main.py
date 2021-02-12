@@ -100,7 +100,7 @@ while True:
         matchesMask = [[0,0] for i in range(len(matches))]
         for i,(m,n) in enumerate(matches):
             if m.distance < 0.7*n.distance:
-                matchesMask[i] = [1,0]
+                # matchesMask[i] = [1,0]
                 pts2.append(kp2[m.trainIdx].pt)
                 pts1.append(kp1[m.queryIdx].pt)
 
@@ -112,7 +112,7 @@ while True:
     if len(kp1) != 0:
         pts2 = np.float32(pts2)
         pts1 = np.float32(pts1)
-        F, mask = cv.findFundamentalMat(pts1, pts2, cv.FM_RANSAC, 0.1, 0.99)
+        F, mask = cv.findFundamentalMat(pts1, pts2, cv.FM_RANSAC, 1, 0.99)
 
         pts1 = pts1[mask.ravel()==1]
         pts2 = pts2[mask.ravel()==1]
@@ -125,21 +125,22 @@ while True:
         # lines2 = lines2.reshape(-1,3)
         # img3,img4 = drawlines(resize_frame,last_frame,lines2,pts2,pts1)
 
-        pt1 = np.array([[pts1[0][0]], [pts1[0][0]], [1]])
-        pt2 = np.array([[pts2[0][0], pts2[0][1], 1]])
+        # pt1 = np.array([[pts1[0][0]], [pts1[0][0]], [1]])
+        # pt2 = np.array([[pts2[0][0], pts2[0][1], 1]])
 
         E, _ = cv.findEssentialMat(pts1, pts2, F, cv.RANSAC, 0.99, 1.0, None)
 
         _, R, t, _ = cv.recoverPose(E, pts1, pts2, F, R, t, None)
 
         # print(R)
+
+        print(t)
         # Decomposing rotation matrix
-        pitch = np.arctan2(R[1][2], R[2][2]) * 180/3.1415
-        yaw = np.arctan2(-R[2][0], np.sqrt(R[2][1]*R[2][1] + R[2][2]*R[2][2])) * 180/3.1415
-        roll = np.arctan2(R[1][0],  R[0][0]) * 180/3.1415
+        # pitch = np.arctan2(R[1][2], R[2][2]) * 180/3.1415
+        # yaw = np.arctan2(-R[2][0], np.sqrt(R[2][1]*R[2][1] + R[2][2]*R[2][2])) * 180/3.1415
+        # roll = np.arctan2(R[1][0],  R[0][0]) * 180/3.1415
         
-        print("Roll: {0}, Pitch: {1}, Yaw: {2}".format(roll,pitch,yaw))
-        # print "Roll: %f, Pitch: %f, Yaw: %f" %(roll , pitch , yaw)
+        # print("Roll: {0}\t, Pitch: {1}\t, Yaw: {2}".format(roll,pitch,yaw))
 
         
         # original image for matches
