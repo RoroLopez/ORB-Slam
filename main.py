@@ -12,6 +12,7 @@ W = int(width / 4)
 H = int(height / 4)
 
 orb = cv.ORB_create(1500, scaleFactor=1.8, nlevels=10)
+fast = cv.FastFeatureDetector_create()
 # bf = cv.BFMatcher(cv.NORM_HAMMING, crossCheck=True)
 bf = cv.BFMatcher()
 
