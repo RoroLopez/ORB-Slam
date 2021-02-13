@@ -49,6 +49,10 @@ t = np.zeros(shape=(3,3))
 #     kp = np.int0(kp)
 #     return kp
 
+def process_features_fast(frame):
+    kp = fast.detect(frame, None)
+    return kp
+
 def process_features_orb(frame):
     kp, des = orb.detectAndCompute(frame, None)
     return kp, des
@@ -80,7 +84,8 @@ while True:
     pts1 = []
     pts2 = []
 
-    kp2, des2 = process_features_orb(resize_frame)
+    # kp2, des2 = process_features_orb(resize_frame)
+    kp2 = process_features_fast(frame)
 
     if len(kp1) == 0:
         kp1, des1, last_frame = kp2, des2, resize_frame
