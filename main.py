@@ -11,7 +11,7 @@ height, width = frame.shape[:2]
 W = int(width / 4)
 H = int(height / 4)
 
-orb = cv.ORB_create(1500, scaleFactor=1.8, nlevels=10)
+orb = cv.ORB_create(2000, scaleFactor=1.8, nlevels=10)
 fast = cv.FastFeatureDetector_create()
 # bf = cv.BFMatcher(cv.NORM_HAMMING, crossCheck=True)
 bf = cv.BFMatcher()
@@ -32,6 +32,8 @@ last_frame = []
 
 R = np.zeros(shape=(3,3))
 t = np.zeros(shape=(3,3))
+
+3dPts = 3dPts
 
 # nt 	nfeatures = 500,
 # float 	scaleFactor = 1.2f,
@@ -69,6 +71,17 @@ def degeneracyCheckPass(first_points, second_points, rot, trans):
  
     return True
 
+def generate_path(rotations, translations):
+    path = []
+    current_point = np.array([0,0,0])
+
+    for R, t in zip(rotations, translations):
+        path.append(current_point)
+        # current_point = current_point + t.reshape((3,))
+    
+    return np.array(path)
+
+id = 0
 while True:
     resize_frame = cv.resize(frame, (W, H))
     resize_frame = cv.cvtColor(resize_frame, cv.COLOR_BGR2GRAY)
@@ -84,8 +97,9 @@ while True:
     pts1 = []
     pts2 = []
 
-    # kp2, des2 = process_features_orb(resize_frame)
-    kp2 = process_features_fast(frame)
+    kp2, des2 = process_features_orb(resize_frame)
+    # print(len(kp2))
+    # kp2 = process_features_fast(frame)
 
     if len(kp1) == 0:
         kp1, des1, last_frame = kp2, des2, resize_frame
@@ -123,24 +137,16 @@ while True:
         pts1 = pts1[mask.ravel()==1]
         pts2 = pts2[mask.ravel()==1]
 
-        # lines1 = cv.computeCorrespondEpilines(pts2.reshape(-1,1,2),2,F)
-        # lines1 = lines1.reshape(-1,3)
-        # img5,img6 = drawlines(last_frame,resize_frame,lines1,pts1,pts2)
+        print(len(pts1) == len(pts2))
 
-        # lines2 = cv.computeCorrespondEpilines(pts1.reshape(-1,1,2),1,F)
-        # lines2 = lines2.reshape(-1,3)
-        # img3,img4 = drawlines(resize_frame,last_frame,lines2,pts2,pts1)
+        if id == 0:
+            E, _ = cv.findEssentialMat(pts1, pts2, F, cv.RANSAC, 0.99, 1.0, None)
+            _, R, t, _ = cv.recoverPose(E, pts1, pts2, F, R, t, None)
+            id += 1
+        else:
+            E, _ = cv.findEssentialMat(pts1, pts2, F, cv.RANSAC, 0.99, 1.0, None)
+            points, R, t, mask = cv.recoverPose(E, pts1, pts2, F, R.copy(), t.copy(), None)
 
-        # pt1 = np.array([[pts1[0][0]], [pts1[0][0]], [1]])
-        # pt2 = np.array([[pts2[0][0], pts2[0][1], 1]])
-
-        E, _ = cv.findEssentialMat(pts1, pts2, F, cv.RANSAC, 0.99, 1.0, None)
-
-        _, R, t, _ = cv.recoverPose(E, pts1, pts2, F, R, t, None)
-
-        # print(R)
-
-        print(t)
         # Decomposing rotation matrix
         # pitch = np.arctan2(R[1][2], R[2][2]) * 180/3.1415
         # yaw = np.arctan2(-R[2][0], np.sqrt(R[2][1]*R[2][1] + R[2][2]*R[2][2])) * 180/3.1415
@@ -160,11 +166,15 @@ while True:
         #     print("distance: {0}".format(m[0].distance))
         # img2 = cv.drawMatchesKnn(last_frame,kp1,resize_frame,kp2,matches,None,**draw_params)
 
+        img2 = cv.drawKeypoints(resize_frame,kp2,outImage=None,color=(0,255,0),flags=0)
+        path = generate_path(R, t)
+
+        plt.plot(path[:,0], path[:,-2])
+
         kp1, des1, last_frame = kp2, des2, resize_frame
 
 
         # drawMatches(img1, keypoints1, img2, keypoints2, matches1to2, outImg, matchColor=None, singlePointColor=None, matchesMask=None, flags=None)
-        img2 = cv.drawKeypoints(resize_frame,kp2,outImage=None,color=(0,255,0),flags=0)
 
     cv.imshow('frame', img2)
 
@@ -176,67 +186,3 @@ while True:
 
 cap.release()
 cv.destroyAllWindows()
-
-# pose calculation code
- 
-# pt1 = np.array([[pts1[0][0]], [pts1[0][1]], [1]])
-# pt2 = np.array([[pts2[0][0], pts2[0][1], 1]])
- 
-# print pt1
-# print pt2
- 
-# print
-# print "The fundamental matrix is"
-# print F
-# print
- 
-# # Should be close to 0
-# print "Fundamental matrix error check: %f"%np.dot(np.dot(pt2,F),pt1)
-# print
- 
-# E = K.T.dot(F).dot(K)
- 
-# print "The essential matrix is"
-# print E
-# print
- 
-# U, S, Vt = np.linalg.svd(E)
-# W = np.array([0.0, -1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]).reshape(3, 3)
-# first_inliers = []
-# second_inliers = []
-# for i in range(len(pts1)):
-#     first_inliers.append(K_inv.dot([pts1[i][0], pts1[i][1], 1.0]))
-#     second_inliers.append(K_inv.dot([pts2[i][0], pts2[i][1], 1.0]))
- 
-# # First choice: R = U * W * Vt, T = u_3
-# R = U.dot(W).dot(Vt)
-# T = U[:, 2]
- 
-# # Start degeneracy checks
-# if not degeneracyCheckPass(first_inliers, second_inliers, R, T):
-#     # Second choice: R = U * W * Vt, T = -u_3
-#     T = - U[:, 2]
-#     if not degeneracyCheckPass(first_inliers, second_inliers, R, T):
-#         # Third choice: R = U * Wt * Vt, T = u_3
-#         R = U.dot(W.T).dot(Vt)
-#         T = U[:, 2]
-#         if not degeneracyCheckPass(first_inliers, second_inliers, R, T):
-#             # Fourth choice: R = U * Wt * Vt, T = -u_3
-#             T = - U[:, 2]
- 
-# print "Translation matrix is"
-# print T
-# print "Modulus is %f" % np.sqrt((T[0]*T[0] + T[1]*T[1] + T[2]*T[2]))
-# print "Rotation matrix is"
-# print R
- 
-# # Decomposing rotation matrix
-# pitch = np.arctan2(R[1][2], R[2][2]) * 180/3.1415
-# yaw = np.arctan2(-R[2][0], np.sqrt(R[2][1]*R[2][1] + R[2][2]*R[2][2])) * 180/3.1415
-# roll = np.arctan2(R[1][0],  R[0][0]) * 180/3.1415
- 
-# print "Roll: %f, Pitch: %f, Yaw: %f" %(roll , pitch , yaw)
- 
-# plt.subplot(121),plt.imshow(img5)
-# plt.subplot(122),plt.imshow(img3)
-# plt.show()

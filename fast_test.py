@@ -9,16 +9,16 @@ height, width = frame.shape[:2]
 W = int(width / 4)
 H = int(height / 4)
 
-fast = cv.FastFeatureDetector_create(threshold=20, nonmaxSuppression=True)
+fast = cv.FastFeatureDetector_create(threshold=120, nonmaxSuppression=True)
 
 R = np.zeros(shape=(3,3))
 t = np.zeros(shape=(3,3))
 
-lk_params = dict(winSize = (15,15),
-                    maxLevel = 2,
-                    criteria = (cv.TERM_CRITERIA_EPS | cv.TERM_CRITERIA_COUNT, 10, 0.03))
+lk_params = dict(winSize = (21,21),
+                    maxLevel = 3,
+                    criteria = (cv.TERM_CRITERIA_EPS | cv.TERM_CRITERIA_COUNT, 1, 0.03))
 
-feature_params = dict(maxCorners = 3000,
+feature_params = dict(maxCorners = 1500,
                         qualityLevel = 0.01,
                         minDistance = 7,
                         blockSize = 7)
@@ -37,13 +37,8 @@ def process_good_features(frame):
     return cv.goodFeaturesToTrack(frame, mask=None, **feature_params)
 
 def process_features(frame):
-    return fast.detect(frame, None)
-
-def asnumpyarray(keypoints):
-    l = []
-    for p in keypoints:
-        l.append([p.pt[0], p.pt[1]])
-    return np.asarray(l)
+    kp = fast.detect(frame, None)
+    return np.array([x.pt for x in kp], dtype=np.float32).reshape(-1,1,2)
 
 while True:
     resized_frame = cv.resize(frame, (W, H))
@@ -51,8 +46,9 @@ while True:
 
     mask = np.zeros_like(resized_frame)
 
-    # kp2 = process_features(resized_frame)
-    kp2 = process_good_features(resized_frame)
+    kp2 = process_features(resized_frame)
+    # print(len(kp2))
+    # kp2 = process_good_features(resized_frame)
 
     # numpy_array = []
     # outer = []
@@ -73,6 +69,7 @@ while True:
 
     if len(kp1) == 0:
         kp1, last_frame = kp2, resized_frame
+        ret, frame = cap.read()
         continue;
     else:
         kp2, st, err = cv.calcOpticalFlowPyrLK(last_frame, resized_frame, kp1, None, **lk_params)
@@ -80,24 +77,23 @@ while True:
     good_new = kp2[st==1]
     good_old = kp1[st==1]
 
-    new_frame = []
+    print(len(good_new))    
 
-    for i, (new,old) in enumerate(zip(good_new, good_old)):
-        a,b = new.ravel()
-        c,d = old.ravel()
-        mask = cv.line(mask, (a,b), (c,d), color[i % len(color)].tolist(), 2)
-        new_frame = cv.circle(resized_frame,(a,b),5,color[i % len(color)].tolist(),-1)
-    
-    img = cv.add(new_frame, mask)
-    # for i in kp2:
-    #     x,y = i.ravel()
-    #     img = cv.circle(resized_frame,(x,y),3,255,-1)
+    F, mask = cv.findFundamentalMat(good_new, good_old, cv.FM_RANSAC, 10, 0.99)
+    # F, mask = cv.findFundamentalMat(good_old,good_new,cv.FM_8POINT)
 
-    # img = cv.drawKeypoints(resized_frame,kp,outImage=None,color=(255,0,0),flags=None)
+    # print(F)
 
-    # new_frame = cv.cvtColor(new_frame, cv.COLOR_GRAY2RGB)
+    # E, _ = cv.findEssentialMat(good_old,good_new,718.856,(607.1928,185.2157),cv.RANSAC,0.99,1.0)
+    E, _ = cv.findEssentialMat(good_old, good_new,F, cv.RANSAC,0.99,1.0,mask)
+    # E, _ = cv.findEssentialMat(good_old,good_new,F,method=None,prob=0.99,threshold=1.0,mask=mask)
+    # print(E)
 
-    cv.imshow('frame', img)
+    _, R, t, _ = cv.recoverPose(E, good_old, good_new, F, R.copy(), t.copy(), None)
+
+    print(t)
+
+    cv.imshow('frame', resized_frame)
 
     if cv.waitKey(1) & 0xFF == ord('q'):
         break
