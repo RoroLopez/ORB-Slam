@@ -14,7 +14,7 @@ H = int(height / 4)
 orb = cv.ORB_create(2000, scaleFactor=1.8, nlevels=10)
 fast = cv.FastFeatureDetector_create()
 # bf = cv.BFMatcher(cv.NORM_HAMMING, crossCheck=True)
-bf = cv.BFMatcher()
+bf = cv.BFMatcher(cv.NORM_HAMMING)
 
 # FLANN based Matcher
 FLANN_INDEX_KDTREE = 0
@@ -33,8 +33,6 @@ last_frame = []
 R = np.zeros(shape=(3,3))
 t = np.zeros(shape=(3,3))
 
-3dPts = 3dPts
-
 # nt 	nfeatures = 500,
 # float 	scaleFactor = 1.2f,
 # int 	nlevels = 8,
@@ -46,10 +44,10 @@ t = np.zeros(shape=(3,3))
 # int 	fastThreshold = 20 
 
 
-# def process_features(frame):
-#     kp = cv.goodFeaturesToTrack(frame, 3000, 0.01, 10)
-#     kp = np.int0(kp)
-#     return kp
+def process_features(frame):
+    kp = cv.goodFeaturesToTrack(frame, 3000, 0.01, 10)
+    kp = np.int0(kp)
+    return kp
 
 def process_features_fast(frame):
     kp = fast.detect(frame, None)
@@ -87,15 +85,9 @@ while True:
     resize_frame = cv.cvtColor(resize_frame, cv.COLOR_BGR2GRAY)
 
     # kp = process_features(resize_frame)
-    # print(len(kp)
 
-    # for p in kp:
-    #     x,y = p.ravel()
-    #     cv.circle(resize_frame, (x,y), 3, color=(0,0,255), thickness=-1)
-
-    good = []
-    pts1 = []
-    pts2 = []
+    ret = []
+    pts1, pts2 = [], []
 
     kp2, des2 = process_features_orb(resize_frame)
     # print(len(kp2))
@@ -103,6 +95,7 @@ while True:
 
     if len(kp1) == 0:
         kp1, des1, last_frame = kp2, des2, resize_frame
+        ret, frame = cap.read()
         continue;
     else:
         # original BF matcher with NORM_HAMMING
@@ -110,24 +103,28 @@ while True:
         # matches = sorted(matches, key = lambda x:x.distance)
 
         # knnMatch matcher
-        # matches = bf.knnMatch(des1, des2, k=2)
-        # for m,n in matches:
-        #     if m.distance < 0.75*n.distance:
-        #         good.append([m])
+        matches = bf.knnMatch(des1, des2, k=2)
+        for m,n in matches:
+            if m.distance < 0.75*n.distance:
+                pt1 = kp1[m.queryIdx].pt
+                pt2 = kp2[m.trainIdx].pt
+
+        
+        print(len(pt1))
 
         # FLANN based Matcher
-        matches = flann.knnMatch(des1,des2,k=2)
-        matchesMask = [[0,0] for i in range(len(matches))]
-        for i,(m,n) in enumerate(matches):
-            if m.distance < 0.7*n.distance:
-                # matchesMask[i] = [1,0]
-                pts2.append(kp2[m.trainIdx].pt)
-                pts1.append(kp1[m.queryIdx].pt)
+        # matches = flann.knnMatch(des1,des2,k=2)
+        # matchesMask = [[0,0] for i in range(len(matches))]
+        # for i,(m,n) in enumerate(matches):
+        #     if m.distance < 0.7*n.distance:
+        #         # matchesMask[i] = [1,0]
+        #         pts2.append(kp2[m.trainIdx].pt)
+        #         pts1.append(kp1[m.queryIdx].pt)
 
-        draw_params = dict(matchColor = (0,255,0),
-                   singlePointColor = (255,0,0),
-                   matchesMask = matchesMask,
-                   flags = 0)
+        # draw_params = dict(matchColor = (0,255,0),
+        #            singlePointColor = (255,0,0),
+        #            matchesMask = matchesMask,
+        #            flags = 0)
 
     if len(kp1) != 0:
         pts2 = np.float32(pts2)
@@ -167,9 +164,6 @@ while True:
         # img2 = cv.drawMatchesKnn(last_frame,kp1,resize_frame,kp2,matches,None,**draw_params)
 
         img2 = cv.drawKeypoints(resize_frame,kp2,outImage=None,color=(0,255,0),flags=0)
-        path = generate_path(R, t)
-
-        plt.plot(path[:,0], path[:,-2])
 
         kp1, des1, last_frame = kp2, des2, resize_frame
 
