@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 import cv2 as cv
+from skimage.measure import ransac
+from skimage.transform import FundamentalMatrixTransform
 from matplotlib import pyplot as plt
 
 cap = cv.VideoCapture('./video/testVideo.mp4')
@@ -59,19 +61,37 @@ while True:
         img = cv.drawKeypoints(resize_frame,kp2,None,color=(255,0,0), flags=None)
 
     matches = bf.knnMatch(des1, des2, k=2)
-
-    # img = cv.drawMatches(last_frame,kp1,resize_frame,kp2,matches[:1000],outImg=None,matchColor=(255,0,0),singlePointColor=None,matchesMask=None,flags=2)
     
     good = []
 
     for m,n in matches:
         if m.distance < 0.75*n.distance:
-            good.append((kp1[m.queryIdx], kp2[m.trainIdx]))
-    
+            pt1 = kp1[m.queryIdx].pt
+            pt2 = kp2[m.trainIdx].pt
+            good.append((pt1, pt2))
+
+    good = np.array(good)
+
+    model, inliers = ransac((good[:,0], good[:, 1]),
+                            FundamentalMatrixTransform,
+                            min_samples=12, residual_threshold=0.01,
+                            max_trials=100)
+
+    # print(sum(inliers))
+    # print(dir(model))
+    # print(model.params)
+
+    good = good[inliers]
+
+    print(len(good))
+
     for pt1, pt2 in good:
-        u1,v1 = map(lambda x: int(round(x)), pt1.pt)
-        u2,v2 = map(lambda x: int(round(x)), pt2.pt)
+        u1,v1 = map(lambda x: int(round(x)), pt1)
+        u2,v2 = map(lambda x: int(round(x)), pt2)
         img = cv.circle(resize_frame, (u1,v1), color=(255,255,0), radius=3)
+        cv.line(resize_frame, (u1,v1), (u2,v2), color=(255,0,0))
+
+
     cv.imshow('frame', img)
 
     if cv.waitKey(1) & 0xFF == ord('q'):
