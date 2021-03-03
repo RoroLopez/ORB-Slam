@@ -126,11 +126,11 @@ while True:
 
     good, pose = get_matches(Kinv, frame1, frame2)        
 
-    # print(pose)
+    print(pose)
     # print(pose[:,3])
     # print(pose[:,3] + pose)
-    maybe = denormalize(K,pose[:,3])
-    print(maybe)
+    # maybe = denormalize(K,pose[:,3])
+    # print(maybe)
 
     # not sure if this is correct ... for Essential Matrix pose recovery
     if len(global_pose) != 0:
