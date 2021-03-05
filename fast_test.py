@@ -8,6 +8,8 @@ from skimage.transform import FundamentalMatrixTransform
 from skimage.transform import EssentialMatrixTransform
 from matplotlib import pyplot as plt
 
+import g2o
+
 cap = cv.VideoCapture('./video/testVideo.mp4')
 ret, frame = cap.read()
 
