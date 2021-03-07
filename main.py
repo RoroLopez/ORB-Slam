@@ -3,7 +3,7 @@ import pandas as pd
 import cv2 as cv
 
 from matcher import Camera, get_pose, get_features, denormalize
-from frame import Frame
+from frame import Frame, IRt
 
 cap = cv.VideoCapture('./video/testVideo.mp4')
 ret, frame = cap.read()
@@ -33,7 +33,8 @@ while True:
         continue;
 
     pts, Rt = get_pose(camera.Kinv, frames[-2], frames[-1])
-    print(Rt)
+    frames[-1].pose = np.dot(Rt, frames[-2].pose)
+    print(frames[-1].pose)
 
     for pt1, pt2 in pts:
         u1,v1 = denormalize(K,pt1)
