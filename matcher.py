@@ -53,10 +53,11 @@ def get_pose(Kinv, frame1, frame2):
                             EssentialMatrixTransform,
                             min_samples=8,
                             #residual_threshold=0.5,
-                            residual_threshold=0.005,
-                            max_trials=100)
+                            residual_threshold=0.007,
+                            max_trials=200)
 
     good = good[inliers]
+    print("{0} matches".format(len(good)))
 
     pose = extractRt(model.params)
 

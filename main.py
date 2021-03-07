@@ -19,12 +19,25 @@ camera = Camera(K)
 
 frames = []
 
-IRt = np.eye(4)
+def triangulatePoints(pose1, pose2, pts1, pts2):
+    return cv.triangulatePoints(pose1[:3], pose2[:3], pts1.T, pts1.T).T
+
+
+class Point(object):
+    def __init__(self, loc):
+        self.location = loc
+        self.frames = []
+        self.idxs = []
+    
+    def add_observation(self, frame, idx):
+        self.frames.append(frame)
+        self.idxs.append(idx)
+
 while True:
     original_frame = cv.resize(frame, (W, H))
     resized_frame = cv.cvtColor(original_frame, cv.COLOR_BGR2GRAY)
 
-    frame = Frame(resized_frame)
+    frame = Frame(resized_frame, K)
     frame.kp, frame.des = get_features(frame.img)
     frames.append(frame)
 
@@ -34,7 +47,18 @@ while True:
 
     pts, Rt = get_pose(camera.Kinv, frames[-2], frames[-1])
     frames[-1].pose = np.dot(Rt, frames[-2].pose)
-    print(frames[-1].pose)
+    # print(frames[-1].pose)
+
+    # homogenous 3D coordinates
+    pts3d = triangulatePoints(frames[-1].pose, frames[-1].pose, pts[:,0], pts[:,1])
+    pts3d /= pts3d[:, 3:]
+
+    # reject points without enough "parallax"...
+    # reject points behind the camera
+    good_pts3d = (np.abs(pts3d[:,3]) > 0.005) & (pts3d[:, 2] > 0)
+    pts3d = pts3d[good_pts3d]
+    
+    print(pts3d)
 
     for pt1, pt2 in pts:
         u1,v1 = denormalize(K,pt1)
