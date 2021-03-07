@@ -1,6 +1,7 @@
 import numpy as np
 np.set_printoptions(suppress=True)
 
+import pandas as pd
 import cv2 as cv
 from skimage.measure import ransac
 from skimage.transform import FundamentalMatrixTransform
@@ -14,10 +15,8 @@ ret, frame = cap.read()
 
 height, width = frame.shape[:2]
 
-# camera intrinsics
 W = int(width / 4)
 H = int(height / 4)
-F = 272.93867730682706
 
 kp1 = []
 des1 = []
@@ -26,10 +25,11 @@ last_frame = []
 R = np.zeros(shape=(3,3))
 t = np.zeros(shape=(3,1))
 
+#F = 1
+F = 272.93867730682706
+
 K = np.array([[F,0,W//2], [0,F,H//2], [0,0,1]])
 Kinv = np.linalg.inv(K)
-print(F)
-print(Kinv)
 
 orb = cv.ORB_create(2500, scaleFactor=1.8, nlevels=12)
 fast = cv.FastFeatureDetector_create()
@@ -77,9 +77,13 @@ def get_matches(Kinv,p1,p2):
             pt1 = p1['kp'][m.queryIdx].pt
             pt2 = p2['kp'][m.trainIdx].pt
             good.append((pt1,pt2))
+
+            # if np.linalg.norm(np.diff([pt1,pt2])) < 0.5*np.linalg.norm([W,H]) and m.distance < 32:
+            #     if m.queryIdx not in x1 and m.trainIdx not in x2:
+            #         x1.append(m.queryIdx)
+            #         x2.append(m.trainIdx)
         
     good = np.array(good)
-    print(good)
 
     good[:,0,:] = normalize(Kinv,good[:,0,:])
     good[:,1,:] = normalize(Kinv,good[:,1,:])
