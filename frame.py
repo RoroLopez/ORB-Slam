@@ -1,4 +1,5 @@
 import numpy as np
+from matcher import get_features, normalize
 
 IRt = np.eye(4)
 class Frame:
@@ -7,6 +8,7 @@ class Frame:
         self.Kinv = np.linalg.inv(K)
         self.w, self.h = img.shape[:2]
         self.img = img
-        self.kp = None
-        self.des = None
         self.pose = IRt
+
+        pts, self.des = get_features(img)
+        self.kp = normalize(self.Kinv, pts)

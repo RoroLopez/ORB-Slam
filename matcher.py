@@ -12,7 +12,8 @@ def get_features(frame):
     key_pts = [cv.KeyPoint(x=f[0][0], y=f[0][1], _size=20) for f in pts]
     key_pts, descriptors = orb.compute(frame, key_pts)
 
-    return key_pts, descriptors
+    # return key_pts, descriptors
+    return np.array([(kp.pt[0], kp.pt[1]) for kp in key_pts]), descriptors
 
 def add_ones(x):
     return np.concatenate([x, np.ones((x.shape[0], 1))], axis=1)
@@ -36,19 +37,25 @@ def get_pose(Kinv, frame1, frame2):
 
     matches = bf.knnMatch(frame1.des, frame2.des, k=2)
     good = []
+    x1,x2 = [],[]
 
     for m,n in matches:
         if m.distance < 0.75*n.distance:
-            pt1 = frame1.kp[m.queryIdx].pt
-            pt2 = frame2.kp[m.trainIdx].pt
+            x1.append(m.queryIdx)
+            x2.append(m.trainIdx)
+
+            pt1 = frame1.kp[m.queryIdx]
+            pt2 = frame2.kp[m.trainIdx]
             good.append((pt1,pt2))
 
     good = np.array(good)
+    x1 = np.array(x1)
+    x2 = np.array(x2)
 
-    good[:,0,:] = normalize(Kinv,good[:,0,:])
-    good[:,1,:] = normalize(Kinv,good[:,1,:])
+    # good[:,0,:] = normalize(Kinv,good[:,0,:])
+    # good[:,1,:] = normalize(Kinv,good[:,1,:])
 
-    model,inliers = ransac((good[:,0], good[:,1]),
+    model,inliers = ransac((frame1.kp[x1], frame2.kp[x2]),
                             #FundamentalMatrixTransform,
                             EssentialMatrixTransform,
                             min_samples=8,
@@ -57,12 +64,11 @@ def get_pose(Kinv, frame1, frame2):
                             max_trials=200)
 
     good = good[inliers]
-    print("{0} matches".format(len(good)))
 
     pose = extractRt(model.params)
 
-    return good, pose
-
+    # return good, pose
+    return x1[inliers], x2[inliers], pose
 
 def normalize(Kinv, pts):
         return np.dot(Kinv, add_ones(pts).T).T[:,0:2]
