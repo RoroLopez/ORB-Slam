@@ -30,60 +30,67 @@ points = []
 def triangulatePoints(pose1, pose2, pts1, pts2):
     return cv.triangulatePoints(pose1[:3], pose2[:3], pts1.T, pts1.T).T
 
-
-q = Queue()
-# viewer = Process(target=generate_map, args=(self.q,))
-
-# gonna skip id identification of the frames and jump straight to the map generation in another thread..
-def generate_map():
-    pangolin.CreateWindowAndBind('Main', 640, 480)
-    gl.glEnable(gl.GL_DEPTH_TEST)
-
-    # Define Projection and initial ModelView matrix
-    scam = pangolin.OpenGlRenderState(
-        pangolin.ProjectionMatrix(640, 480, 420, 420, 320, 240, 0.2, 100),
-        pangolin.ModelViewLookAt(-2, 2, -2, 0, 0, 0, pangolin.AxisDirection.AxisY))
-    handler = pangolin.Handler3D(scam)
-
-    # Create Interactive View in window
-    dcam = pangolin.CreateDisplay()
-    dcam.SetBounds(0.0, 1.0, 0.0, 1.0, -640.0/480.0)
-    dcam.SetHandler(handler)
-
-    darr = None
-    while not pangolin.ShouldQuit():
-        darr = q.get(darr is None)
-
-        gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
-        gl.glClearColor(1.0, 1.0, 1.0, 1.0)
-        dcam.Activate(scam)
-
-        gl.glPointSize(10)
-        gl.glColor3f(0.0, 1.0, 0.0)
-        pangolin.DrawPoints(d[:3, 3] for d in darr[0])
-
-        gl.glPointSize(2)
-        gl.glColor3f(0.0, 1.0, 0.0)
-        pangolin.DrawPoints(d for d in darr[1])
-
-        pangolin.FinishFrame()
-
 class Map(object):
     def __init__(self):
         self.frames = []
         self.points = []
 
+        self.q = Queue()
+        self.viewer = Process(target=self.viewer_thread, args=(self.q, ))
+        self.viewer.daemon = True
+        self.viewer.start()
+
     def display_map(self):
+        poses, pts = [],[]
         for f in self.frames:
-            print(f.id)
-            print(f.pose)
+            poses.append(f.pose)
+        for p in self.points:
+            pts.append(p.pt)
+        self.q.put((poses, pts))
+    
+    def viewer_thread(self, q):
+        pangolin.CreateWindowAndBind('Main', 640, 480)
+        gl.glEnable(gl.GL_DEPTH_TEST)
+
+        # Define Projection and initial ModelView matrix
+        self.scam = pangolin.OpenGlRenderState(
+            pangolin.ProjectionMatrix(640, 480, 420, 420, 320, 240, 0.2, 100),
+            pangolin.ModelViewLookAt(-2, 2, -2, 0, 0, 0, pangolin.AxisDirection.AxisY))
+        self.handler = pangolin.Handler3D(self.scam)
+
+        # Create Interactive View in window
+        self.dcam = pangolin.CreateDisplay()
+        self.dcam.SetBounds(0.0, 1.0, 0.0, 1.0, -640.0/480.0)
+        self.dcam.SetHandler(self.handler)
+
+        darr = None
+        while not pangolin.ShouldQuit():
+            if darr is None or not q.empty():
+                darr = q.get(True)
+
+            gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
+            gl.glClearColor(1.0, 1.0, 1.0, 1.0)
+            self.dcam.Activate(self.scam)
+
+            gl.glPointSize(10)
+            gl.glColor3f(0.0, 1.0, 0.0)
+            # pangolin.DrawPoints(np.array([d[:3, 3]]) for d in darr[0])
+            pangolinPoints = np.array([d[:3,3] for d in darr[0]])
+            pangolin.DrawPoints(pangolinPoints)
+
+            gl.glPointSize(2)
+            gl.glColor3f(0.0, 1.0, 0.0)
+            # pangolin.DrawPoints(np.array([d]) for d in darr[1])
+            pangolinD = np.array([d for d in darr[1]])
+            pangolin.DrawPoints(pangolinD)
+            pangolin.FinishFrame()
     
 
 mapp = Map()
 
 class Point(object):
     def __init__(self, mapp, loc):
-        self.location = loc
+        self.pt = loc
         self.frames = []
         self.idxs = []
         self.id = len(mapp.points)
